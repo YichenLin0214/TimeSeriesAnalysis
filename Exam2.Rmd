@@ -1,0 +1,237 @@
+---
+title: "Practicum_Exam2"
+author: "Yichen Lin"
+date: "4/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Reference
+https://fred.stlouisfed.org/series/DCOILWTICO
+https://www.analyticsvidhya.com/blog/2015/12/complete-tutorial-time-series-modeling/#
+http://www.statosphere.com.au/check-time-series-stationary-r/
+http://ucanalytics.com/blogs/step-by-step-graphic-guide-to-forecasting-through-arima-modeling-in-r-manufacturing-case-study-example/
+
+
+```{r}
+library('tseries')
+library('aTSA') 
+library('TSA')
+Oil<-read.csv("~/Desktop/PracticumExam2/DCOILWTICO.csv",na.strings = "?", header =TRUE)
+```
+
+## Q2.	Plot out your time series variable.  Tell me using your Mark I eyeball whether or not you think the time series data set is stationary in terms of constant mean and also constant variance.
+
+The data set does not seem stationary in terms of constant mean. It does not have strong seasonal effect for U.S.GDP because the variance and the mean value are similer in every quarter.
+
+```{r}
+#Make data into timeseries
+myts <- ts(Oil$DCOILWTICO, start=c(1986, 1), end=c(2018, 3), frequency=12)
+#Constant mean plot 
+plot(aggregate(myts,FUN=mean), main = "Crude Oil Prices: West Texas Intermediate (WTI) - Cushing, Oklahoma" , xlab = "Date", ylab = "Crude Oil Prices(Mean)", col = "blue")
+#Constant variance plot
+boxplot(myts~cycle(myts), main = "Crude Oil Prices: West Texas Intermediate (WTI) - Cushing, Oklahoma" , xlab = "Months", ylab = "Crude Oil Prices")
+```
+
+## Q3.	Plot the ACF for the time series data set. Looking at ACF, does it look like there may be a trend or non-constant mean for each time series?
+
+ACF in the graph shows there may be a trend and non-constant mean for the time series. 
+
+```{r}
+#Acf test
+acf(myts)
+```
+
+## Q4.	Now let's examine the time series data set using unit root tests.   First use the KPSS test for the time series data set and tell me if the test suggests if there is a constant mean or not.  Then see if you can confirm your KPSS evaluation using the Augmented Dickey Fuller (ADF) or the ADF-GLS test for each time series.   What is your decision concerning constant mean?
+
+The Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test reject the null hypothesis means that the series is not stationarity.
+
+The Augmented Dickey–Fuller (ADF) t-statistic test has large p-values suggests the data is not stationary and does need to be differenced stationarity.
+```{r}
+#KPSS test
+kpss.test(myts)
+#ADF test
+adf.test(myts)
+```
+
+# Q5.	Review the decisions in step #4.  If the test suggests that there is a non-constant mean then use differencing to create a new differenced variable for the time series data set.  
+
+a.	Plot out the data for the new differenced data set.  Tell me if it looks like the differencing got rid of the trend or non-constant mean.
+
+The differencing got rid off the trend and has non-constant mean.
+```{R}
+#Log transformation
+logdiff.myts<-diff(log(myts))
+plot(logdiff.myts)
+#Constant mean plot 
+plot(aggregate(logdiff.myts,FUN=mean), main = "Crude Oil Prices: West Texas Intermediate (WTI) - Cushing, Oklahoma" , xlab = "Date", ylab = "Crude Oil Prices(Mean)", col = "blue")
+#Constant variance plot
+boxplot(logdiff.myts~cycle(logdiff.myts), main = "Crude Oil Prices: West Texas Intermediate (WTI) - Cushing, Oklahoma" , xlab = "Months", ylab = "Crude Oil Prices")
+```
+b.	Plot the ACF for the differenced time series.  Tell me if this new ACF plot looks like there now is no trend.
+
+ACF in the graph shows there is not a strong trend in our data set and non-constant mean. The graph has a cut off on ACF curve after 2nd lag which means this is mostly a MA(2) process.
+
+```{r}
+#Acf test
+acf(logdiff.myts)
+```
+c.	Apply the KPSS test and the ADF or ADF-GLS test to the differenced data - does the trend disappear?
+
+The Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test accepting the null hypothesis means that the series is stationarity.
+
+The Augmented Dickey–Fuller (ADF) t-statistic test has small p-values suggest the data is stationary and doesn’t need to be differenced stationarity.
+
+```{R}
+#KPSS test
+kpss.test(logdiff.myts)
+#ADF test
+adf.test(logdiff.myts)
+```
+
+# Note:  From this point onward through step 8, if the time series was differenced, use the differenced time series data set for all the rest of the questions.  Otherwise you can use the undifferenced data set.
+
+6.	Test each of the time series data sets for constant variance using the ARCH test (GRETL does this nicely).  Tell me which ones might have issues with constant variance and so not be so nicely stationary.  Note that we will not do anything about this issue for the moment, but it's good to know.
+
+In ARCH heteroscedasticity, Portmanteau-Q test shows significant in lag 4 and the p-value are 1.16e-10. 
+Lagrange-Multiplier test also got a p-value less than 0.00e+00 in lag 4. They don't havr the issues with constant variance and is stationary.
+
+```{r}
+#ARCH
+arima.logdiff.myts <- arima(logdiff.myts)
+arch.test(arima.logdiff.myts)
+```
+
+7.	Plot the PACF for the time series data sets.  Using the combined information from the ACF you plotted earlier along with the information in the PACF, tell me if you see autoregressive and/or moving average processes in the data set.  To help with interpretation you may want to refer to online resources - here is a decent resource from Duke University https://people.duke.edu/~rnau/411arim3.htm  or  Penn State https://onlinecourses.science.psu.edu/stat510/node/64
+
+PACF has a very large spike at lag 1 and no other significant spikes, indicating that in the absence of differencing an AR(1) model should be used. 
+
+```{r}
+acf(logdiff.myts)
+pacf(logdiff.myts)
+```
+
+8.	For your time series data set, experiment with different ARIMA models for them.  As you try them, list out the results of the various models and
+
+a.	Comment on how each one is working and compare it to the previous model using various metrics such as SBC, BIC, Box Leung, etc.   Most students end up creating a small able with these statistics across the models tried so it is easy to compare them.   
+```{r}
+# forcast
+require(forecast)
+ARIMAfit = auto.arima(log10(myts), approximation=FALSE,trace=FALSE)
+summary(ARIMAfit)
+```
+
+b.	Plot the observed versus fitted data for the time series data set and comment on how well the model seems to be working
+
+```{r}
+# plot fit
+fit <- Arima(myts,order=c(2,1,1))
+plot(fit$x,col="red")
+lines(myts,col="blue")
+```
+
+c.	Pick one of the models as your favorite and tell me why you like that one the best.
+
+The best model is using ARIMA(2,1,1) which has the smallest aic value (aic = -1462.66 ). 
+
+d.	Forecast out your favorite model for the next 6 time periods and plot your time series plus the forecasted data.  Does it look good or funky?
+
+The output with forecasted values of tractor sales in blue. Also, the range of expected error (i.e. 2 times standard deviation) is displayed with orange lines on either side of predicted blue line.
+
+```{r}
+# predict
+par(mfrow = c(1,1))
+pred = predict(ARIMAfit, n.ahead = 6)
+pred
+plot(myts,type='l',xlim=c(2010,2019))
+lines(10^(pred$pred),col='blue')
+lines(10^(pred$pred+2*pred$se),col='orange')
+lines(10^(pred$pred-2*pred$se),col='orange')
+```
+
+Now switch to data set #2 - the one with seasonality in it.  Perform the following steps.
+
+9.	For the time series data set with seasonality - start with the raw data before differencing here please!!!
+
+```{r}
+# UNRATE
+UNRate<-read.csv("~/Desktop/PracticumExam2/UNRATE.csv",na.strings = "?", header =TRUE)
+```
+a.	Plot out the time series and suggest whether a type 
+1, type 2 or type 3 Holt Winter model should be applied and why.
+
+```{r}
+#Make data into timeseries
+myts2 <- ts(UNRate$UNRATE, start=c(1948, 1), end=c(2018, 3), frequency=12)
+#Constant mean plot 
+plot(myts2, main = "Civilian Unemployment Rate" , xlab = "Date", ylab = "Unemployment Rate", col = "blue")
+```
+
+b.	Eyeball the size of the period. What do you think it might be?  Why is that?
+
+Sesonally become more stable after year 1970, it seem like the size of the period is 10 years.
+
+c.	Use GRETL to do a periodogram for the data.  What does the periodogram suggest might be the period length for the data?
+https://onlinecourses.science.psu.edu/stat510/?q=book/export/html/52
+The periodogram suggest 36 years for a period length. 
+```{r}
+# periodogram
+period<-periodogram(myts2)
+round(period$freq,4)
+round(period$spec,4)
+1/0.0023 #434.7826
+434.7826/12 #36
+```
+
+
+d.	If a type 2 or type 3 model, then apply a KPSS or ADF test to test for trend.
+
+Type 3 model in ADF test shows their is a trend.
+```{r}
+kpss.test(myts2)
+adf.test(myts2)
+```
+
+e.	Decide the weights you will use for the three components of Winter Holt smoothing - constant, trend and seasonality - why these values?  If you are using SAS then read about these weights in the proc docs, otherwise fish around in the R or Python docs.
+
+My data can be described using an additive model with increasing or decreasing trend and seasonality, so i use Holt-Winters Exponential Smoothing.
+
+```{r}
+HoltWinters(myts2)
+holt.myts2<-(HoltWinters(myts2))
+```
+
+f.	Run the Holt Winter model and then using sgplot or your other favorite plotting poison plot the actual data and the fitted/forecast data on the same graph.  How did the Holt-Winter model do in terms of forecasting?
+
+#http://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/src/timeseries.html#holt-s-exponential-smoothing
+```{r}
+# plot holt winter model
+plot(holt.myts2)
+# forecasting
+myts2.forecast <- forecast(holt.myts2, h=36)
+plot(myts2.forecast)
+```
+g.	Next run the same data set using the Unobserved Components Model time series analytic technique.  Interpret the significance analysis of components table (based on final components in terms of trend, irregular (ARMA) and seasonality components in the data set - that is, which components are statistically significant?
+
+#https://cran.r-project.org/web/packages/rucm/vignettes/rucm_vignettes.html
+ucm returns an object of class ucm having the estimate of predictors, estimated variances, time series of unobserved components (level, slope, whatever is included), and time series of the variances of these components.
+
+```{r}
+#UCM
+library(rucm)
+ucm.myts2 <- ucm(formula = myts2~0, data = myts2, level = TRUE, slope = TRUE)
+ucm.myts2
+```
+
+h.	Have the UCM model produce fitted values for the existing data and forward 12 periods into the future and plot the original time series as well as the fitted/forecast data as well.
+
+```{r}
+# predict UCM
+pred.ucm.myts2<-predict(ucm.myts2$model, n.ahead = 12) 
+pred.ucm.myts2 #4.085793 4.075416 4.065039 4.054663 4.044286 4.033909 4.023533 4.013156 4.002780 3.992403 3.982026 3.971650   
+plot(myts2)
+lines(pred.ucm.myts2, col='blue')
+```
